@@ -7,5 +7,6 @@ __pycache__/
 *.pyo
 
 checkpoints/
+notebooks/.ipynb_checkpoints/
 
 results/
