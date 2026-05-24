@@ -5,6 +5,9 @@ from pathlib import Path
 from tqdm import tqdm
 from PIL import Image
 
+skip=10         # every 10th frame gets processed
+max_faces=30    # 30 faces per video
+
 def get_split(video_num):
     if video_num < 720:
         return "train"
@@ -14,7 +17,7 @@ def get_split(video_num):
         return "test"
 
 def save_faces(videos, label, mtcnn, manipulation):
-    for video in tqdm(videos, desc=f"Processing {label}"):
+    for video in tqdm(videos, desc=f"Processing {manipulation}"):
         
         cap = None
         try:
@@ -30,7 +33,7 @@ def save_faces(videos, label, mtcnn, manipulation):
             saved_count=0
             while True:
                 ret, frame = cap.read()
-                if not ret or saved_count >=30:
+                if not ret or saved_count >=max_faces:
                     break 
                 
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -40,7 +43,9 @@ def save_faces(videos, label, mtcnn, manipulation):
                     faces, probs = mtcnn(pil_frame, return_prob=True)
                 
                 if faces is not None:
-                    best_idx = int(torch.tensor(probs).argmax())
+                    probs = list(probs)
+                    best_idx = probs.index(max(probs))
+                    
                     face = faces[best_idx] 
                     face_np = ((face.permute(1,2,0).cpu().numpy()+1)/2*255).astype("uint8")
                     face_bgr = cv2.cvtColor(face_np, cv2.COLOR_RGB2BGR)
@@ -53,8 +58,8 @@ def save_faces(videos, label, mtcnn, manipulation):
                     success = cv2.imwrite(f"../data/processed/{split}/{label}/{name}", face_bgr)
                     if success:
                         saved_count+=1
-                        
-                for _ in range(9):
+                
+                for _ in range(skip-1):
                     cap.grab()        
         except Exception as e:
             print(f"Error processing {video.name}: {e}")
@@ -84,7 +89,7 @@ if __name__ == "__main__":
     save_faces(neuraltextures_videos, "fake", mtcnn, "neuraltextures")
     save_faces(deepfakes_videos, "fake", mtcnn, "deepfakes")
     
-    save_faces(real_videos, "real", mtcnn, None )
+    save_faces(real_videos, "real", mtcnn, "real" )
            
             
             
