@@ -51,7 +51,7 @@ if __name__ == "__main__":
     model, device = get_model()
     print(f"Model running on {device}")
 
-    criterion= nn.BCEWithLogitsLoss()
+    criterion= nn.BCEWithLogitsLoss(pos_weight=torch.tensor([6.35]).to(device))
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
 
