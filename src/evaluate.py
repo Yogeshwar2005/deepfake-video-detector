@@ -4,6 +4,10 @@ from torchvision import transforms
 from tqdm import tqdm
 import argparse
 from pathlib import Path
+from sklearn.metrics import(
+    confusion_matrix, balanced_accuracy_score,
+    classification_report
+)
 
 
 import sys
@@ -14,7 +18,10 @@ from dataset import ImagesDataset
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--checkpoint", type=str, required=True, help="Path to model")
+    parser.add_argument("-t","--threshold",type = float, required=False, default=None, help="Threshold for predicting fake")
     args = parser.parse_args()
+    
+
     
     eval_transforms = transforms.Compose([
         transforms.ToPILImage(),
@@ -31,17 +38,36 @@ if __name__ == "__main__":
     
     checkpoint = torch.load(Path(args.checkpoint), map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
-    model.eval()
+    print("Loaded checkpoint:", args.checkpoint)
     
-    correct=0
-    total=0
+    if args.threshold is not None:
+        threshold = args.threshold
+    else:
+        threshold = checkpoint["threshold"]
+    
+    print(f"Threshold: {threshold}")
+
+    
+    model.eval()
+    all_preds=[]
+    all_labels = []
     with torch.inference_mode():
         for images, labels in tqdm(test_loader, desc="Testing"):
                 images = images.to(device)
                 labels = labels.float().unsqueeze(1).to(device)
                 outputs = model(images)
-                predictions =(outputs > 0).float()
-                correct+= (predictions == labels).float().sum().item()
-                total += labels.shape[0]
-    accuracy = correct / total
-    print("Accuracy:", accuracy)
+                probs = torch.sigmoid(outputs)
+                predictions = (probs> threshold).float()
+                
+                all_preds.extend(predictions.cpu().numpy().flatten())
+                all_labels.extend(labels.cpu().numpy().flatten())
+
+    
+    print("Confusion matrix: ")
+    print(confusion_matrix(all_labels, all_preds))
+            
+    print("Classification report: ")
+    print(classification_report(all_labels, all_preds, target_names=["real", "fake"]))
+
+    balanced_acc_score = balanced_accuracy_score(all_labels, all_preds)
+    print("Balanced accuracy:",balanced_acc_score)

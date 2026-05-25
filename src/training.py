@@ -2,10 +2,16 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import argparse
+import numpy as np
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from tqdm import tqdm
 from datetime import datetime
+from sklearn.metrics import (
+    confusion_matrix,
+    classification_report,
+    balanced_accuracy_score
+)
 
 
 import sys
@@ -23,6 +29,7 @@ if __name__ == "__main__":
     parser.add_argument("-bs", "--batch_size", type=int, default=32, required=False, help="Batch size")
     parser.add_argument("-n", "--num_workers", type=int, default=4, required=False, help="Number of workers")
     parser.add_argument("-r", "--resume", type=str,default=None,required=False, help="Path to checkpoint to resume training")
+
     args = parser.parse_args()
 
     EPOCHS = args.epochs
@@ -51,20 +58,21 @@ if __name__ == "__main__":
     model, device = get_model()
     print(f"Model running on {device}")
 
-    criterion= nn.BCEWithLogitsLoss(pos_weight=torch.tensor([6.35]).to(device))
+    criterion= nn.BCEWithLogitsLoss()# (pos_weight=torch.tensor([]).to(device))
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
 
     start_epoch = 0
-    best_accuracy=0.0
+    global_best_balanced_acc_score=0.0
+    global_best_threshold=0.5
     
     if args.resume is not None:
         checkpoint = torch.load(args.resume, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         start_epoch = checkpoint["epoch"]
-        best_accuracy = checkpoint["best_accuracy"]
-        
+        global_best_balanced_acc_score = checkpoint["global_best_balanced_acc_score"]
+        global_best_threshold = checkpoint["global_best_threshold"]
         print(f"Resumed training from epoch {start_epoch}")
     
     for epoch in range(start_epoch, EPOCHS):
@@ -80,37 +88,81 @@ if __name__ == "__main__":
             optimizer.step()
             running_loss+=loss.item()
         
-        avg_loss = running_loss / len(train_loader)    
+        avg_loss = running_loss / len(train_loader)
+            
         model.eval()
+        
+        all_probs = []
+        all_labels = []
         with torch.inference_mode():
-            correct=0
-            total=0
             for images, labels in tqdm(val_loader, desc=f"Epoch {epoch+1}/{EPOCHS} Val"):
                 images = images.to(device)
                 labels = labels.float().unsqueeze(1).to(device)
                 outputs = model(images)
-                predictions = (outputs>0).float()
-                correct+= (predictions==labels).float().sum().item()
-                total+= labels.shape[0]
+                probs = torch.sigmoid(outputs)
                 
-            accuracy = correct / total
+                all_probs.extend(probs.cpu().numpy().flatten())
+                all_labels.extend(labels.cpu().numpy().flatten())
+                    
+            thresholds = np.arange(0.01, 1.0, 0.01)
+            epoch_best_threshold = 0.5
+            epoch_best_balanced_acc_score = 0.0
+            all_probs = np.array(all_probs) 
+            for t in thresholds:
+                all_preds = (all_probs > t).astype(float)
+                balanced_acc_score = balanced_accuracy_score(all_labels, all_preds)
+                if (epoch_best_balanced_acc_score < balanced_acc_score):
+                    epoch_best_threshold = t
+                    epoch_best_balanced_acc_score = balanced_acc_score
         
-        is_best = accuracy > best_accuracy
+        all_preds = (all_probs > epoch_best_threshold).astype(float)
+        
+
+        print("Confusion matrix:")
+        print(confusion_matrix(all_labels, all_preds))
+
+        print("Classification report:")
+        print(classification_report(
+            all_labels,
+            all_preds,
+            target_names=["real", "fake"]
+        ))
+                
+        
+        
+        is_best = epoch_best_balanced_acc_score > global_best_balanced_acc_score
         if is_best:
-            best_accuracy=accuracy
+            global_best_balanced_acc_score=epoch_best_balanced_acc_score
+            global_best_threshold=epoch_best_threshold
+        
+            cp ={
+                "epoch": epoch +1,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "global_best_balanced_acc_score": global_best_balanced_acc_score,
+                "global_best_threshold": global_best_threshold
+            }
+            torch.save(cp,"../checkpoints/best.pth")
+            print(f"New best model saved: {global_best_balanced_acc_score:.4f}")
         
         cp ={
                 "epoch": epoch +1,
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
-                "best_accuracy": best_accuracy
+                "global_best_balanced_acc_score": global_best_balanced_acc_score,
+                "balanced_acc_score": epoch_best_balanced_acc_score,
+                "global_best_threshold": global_best_threshold,
+                "latest_threshold": epoch_best_threshold
             }
-        
-        if is_best:
-            torch.save(cp,"../checkpoints/best.pth")
-            print(f"New best model saved: {accuracy:.4f}")
-        
-        
         torch.save(cp,"../checkpoints/latest.pth")
         lr = optimizer.param_groups[0]["lr"]
-        print(f"Epoch: {epoch+1}/{EPOCHS}, Loss:{avg_loss:.4f}, Val accuracy: {accuracy:.4f}, lr: {lr}")
+        print(f"Best threshold for epoch {epoch+1}: {epoch_best_threshold}")
+        print(f"Best model threshold: {global_best_threshold}")
+        print(
+            f"Epoch: {epoch+1}/{EPOCHS}," 
+            f"Loss:{avg_loss:.4f}," 
+            f"Balanced accuracy: {epoch_best_balanced_acc_score:.4f}," 
+            f"Best balanced accuracy: {global_best_balanced_acc_score},"
+            f"lr: {lr}"
+            )
+    
