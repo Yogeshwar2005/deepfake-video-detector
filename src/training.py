@@ -1,3 +1,5 @@
+# IMPORTS
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -10,7 +12,9 @@ from datetime import datetime
 from sklearn.metrics import (
     confusion_matrix,
     classification_report,
-    balanced_accuracy_score
+    balanced_accuracy_score,
+    roc_curve,
+    roc_auc_score
 )
 import albumentations as A
 
@@ -44,7 +48,7 @@ if __name__ == "__main__":
                                     A.HorizontalFlip(p=0.5),
                                     A.OneOf([
                                         A.ImageCompression(quality_range=(20,90), p=1.0),
-                                        A.GaussNoise(std_range= (0.01,0.05), p=1.0),
+                                        A.GaussNoise(std_range= (0.01,0.05  ), p=1.0),
                                         ], p=0.5),
                                     A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.25),
                                     A.Normalize(mean=[0.485,0.456,0.406],std=[0.229,0.224,0.225]),
@@ -59,6 +63,8 @@ if __name__ == "__main__":
 
     train_dataset= ImagesDataset("../data/processed/train/", transform=train_transforms)
     val_dataset = ImagesDataset("../data/processed/val/", transform= eval_transforms)
+    
+    # SAMPLER
     
     # targets = train_dataset.labels
     # class_counts = np.bincount(targets)
@@ -79,21 +85,24 @@ if __name__ == "__main__":
     model, device = get_model()
     print(f"Model running on {device}...")
 
-    criterion= nn.BCEWithLogitsLoss()# (pos_weight=torch.tensor([]).to(device))
+    # POS_WEIGHT
+    
+    # cirterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([6.35]).to(device))
+    criterion= nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
 
     start_epoch = 0
-    global_best_balanced_acc_score=0.0
-    global_best_threshold=0.5
+    global_balanced_acc_score=0.0
+    global_threshold=0.5
     
     if args.resume is not None:
         checkpoint = torch.load(args.resume, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         start_epoch = checkpoint["epoch"]
-        global_best_balanced_acc_score = checkpoint["global_best_balanced_acc_score"]
-        global_best_threshold = checkpoint["global_best_threshold"]
+        global_balanced_acc_score = checkpoint["global_balanced_acc_score"]
+        global_threshold = checkpoint["global_threshold"]
         print(f"Resumed training from epoch {start_epoch}")
     
     print("Compiling model...")
@@ -138,19 +147,28 @@ if __name__ == "__main__":
                 all_probs.extend(probs.cpu().numpy().flatten())
                 all_labels.extend(labels.cpu().numpy().flatten())
                     
-            thresholds = np.arange(0.01, 1.0, 0.01)
-            epoch_best_threshold = 0.5
-            epoch_best_balanced_acc_score = 0.0
+          
+            all_probs = np.array(all_probs)
+            fpr,tpr,thresholds = roc_curve(all_labels, all_probs)
+            balanced_acc_scores = (tpr + (1-fpr)) / 2
+            best_idx = balanced_acc_scores.argmax()
+            epoch_threshold = thresholds[best_idx]
+            epoch_balanced_acc_score = balanced_acc_scores[best_idx]
             
-            all_probs = np.array(all_probs) 
-            for t in thresholds:
-                all_preds = (all_probs > t).astype(float)
-                balanced_acc_score = balanced_accuracy_score(all_labels, all_preds)
-                if (epoch_best_balanced_acc_score < balanced_acc_score):
-                    epoch_best_threshold = t
-                    epoch_best_balanced_acc_score = balanced_acc_score
+            
+            # THRESHOLD SWEEP
+            
+            # thresholds = np.arange(0.01, 1.0, 0.01)
+            # epoch_threshold = 0.5
+            # epoch_balanced_acc_score = 0.0
+            # for t in thresholds:
+            #     all_preds = (all_probs > t).astype(float)
+            #     epoch_balanced_acc_score = balanced_accuracy_score(all_labels, all_preds)
+            #     if (epoch_balanced_acc_score < epoch_balanced_acc_score):
+            #         epoch_threshold = t
+            #         epoch_balanced_acc_score = epoch_balanced_acc_score
         
-        all_preds = (all_probs > epoch_best_threshold).astype(float)
+        all_preds = (all_probs > epoch_threshold).astype(float)
         
 
         print("Confusion matrix:")
@@ -162,41 +180,44 @@ if __name__ == "__main__":
             all_preds,
             target_names=["real", "fake"]
         ))
+        
+        auc = roc_auc_score(all_labels, all_probs)
+        print(f"AUC {auc}")
                 
-        is_best = epoch_best_balanced_acc_score > global_best_balanced_acc_score
+        is_best = epoch_balanced_acc_score > global_balanced_acc_score
         if is_best:
-            global_best_balanced_acc_score=epoch_best_balanced_acc_score
-            global_best_threshold=epoch_best_threshold
+            global_balanced_acc_score=epoch_balanced_acc_score
+            global_threshold=epoch_threshold
         
             cp ={
                 "epoch": epoch +1,
                 "model_state_dict": model._orig_mod.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
-                "global_best_balanced_acc_score": global_best_balanced_acc_score,
-                "global_best_threshold": global_best_threshold
+                "global_balanced_acc_score": global_balanced_acc_score,
+                "global_threshold": global_threshold
             }
             torch.save(cp,"../checkpoints/best.pth")
-            print(f"New best model saved: {global_best_balanced_acc_score:.4f}")
+            print(f"New best model saved: {global_balanced_acc_score:.4f}")
         
         cp ={
                 "epoch": epoch +1,
                 "model_state_dict": model._orig_mod.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
-                "global_best_balanced_acc_score": global_best_balanced_acc_score,
-                "balanced_acc_score": epoch_best_balanced_acc_score,
-                "global_best_threshold": global_best_threshold,
-                "latest_threshold": epoch_best_threshold
+                "global_balanced_acc_score": global_balanced_acc_score,
+                "epoch_balanced_acc_score": epoch_balanced_acc_score,
+                "global_threshold": global_threshold,
+                "epoch_threshold": epoch_threshold
             }
         torch.save(cp,"../checkpoints/latest.pth")
         
         lr = optimizer.param_groups[0]["lr"]
-        print(f"Best threshold for epoch {epoch+1}: {epoch_best_threshold:.4f}")
-        print(f"Best model threshold: {global_best_threshold:.4f}")
+        print(f"Threshold of epoch {epoch+1}: {epoch_threshold:.4f}")
+        print(f"Threshold of best model: {global_threshold:.4f}")
         print(
             f"Epoch: {epoch+1}/{EPOCHS} \n" 
             f"Loss:{avg_loss:.4f} \n" 
-            f"Balanced accuracy: {epoch_best_balanced_acc_score:.4f} \n" 
-            f"Best balanced accuracy: {global_best_balanced_acc_score:.4f} \n"
+            f"Balanced accuracy of epoch: {epoch_balanced_acc_score:.4f} \n" 
+            f"Balanced accuracy of best model: {global_balanced_acc_score:.4f} \n"
             f"lr: {lr} \n"
             )
     

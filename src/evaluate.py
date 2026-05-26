@@ -6,10 +6,10 @@ import argparse
 from pathlib import Path
 from sklearn.metrics import(
     confusion_matrix, balanced_accuracy_score,
-    classification_report
+    classification_report, roc_auc_score
 )
 import albumentations as A
-
+import numpy as np
 
 import sys
 sys.path.append("../src/")
@@ -50,12 +50,12 @@ if __name__ == "__main__":
     if args.threshold is not None:
         threshold = args.threshold
     else:
-        threshold = checkpoint["global_best_threshold"]
+        threshold = checkpoint["global_threshold"]
     
     print(f"Threshold: {threshold:.4f}")
 
-    all_preds=[]
     all_labels = []
+    all_probs=[]
     with torch.inference_mode():
         for images, labels in tqdm(test_loader, desc="Testing"):
                 images = images.to(device, non_blocking=True)
@@ -66,17 +66,19 @@ if __name__ == "__main__":
                 outputs = model(images)
                 
                 probs = torch.sigmoid(outputs)
-                predictions = (probs> threshold).float()
                 
-                all_preds.extend(predictions.cpu().numpy().flatten())
+                all_probs.extend(probs.cpu().numpy().flatten())
                 all_labels.extend(labels.cpu().numpy().flatten())
+    all_preds = (np.array(all_probs) > threshold).astype(float)
 
-    
     print("Confusion matrix: ")
     print(confusion_matrix(all_labels, all_preds))
             
     print("Classification report: ")
     print(classification_report(all_labels, all_preds, target_names=["real", "fake"]))
 
+    auc = roc_auc_score(all_labels, all_probs)
+    print(f"AUC {auc}")
+    
     balanced_acc_score = balanced_accuracy_score(all_labels, all_preds)
     print(f"Balanced accuracy: {balanced_acc_score:.4f}")
