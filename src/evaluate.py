@@ -19,17 +19,32 @@ from dataset import ImagesDataset
 if __name__ == "__main__":
     torch.set_float32_matmul_precision('high')
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--checkpoint", type=str, required=True, help="Path to model")
+    parser.add_argument("-l", "--load", type=str, required=True, help="Path to model")
     parser.add_argument("-t","--threshold",type = float, required=False, default=None, help="Threshold for predicting fake")
+    parser.add_argument("-c","--compress",type = int, required=False, default=0, help="Whether to apply compression transformation or not")
+
     args = parser.parse_args()
     
 
     
-    eval_transforms = A.Compose([
+    if(args.compress == 1):
+        print("Compression transformation applied")
+        eval_transforms = A.Compose([
         A.Resize(224,224),
+        A.ImageCompression(quality_range=(10,30)),
         A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         A.ToTensorV2(),
     ])
+        
+    else:
+        print("No compression transformation applied")
+        eval_transforms = A.Compose([
+                          A.Resize(224,224),
+                          A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                          A.ToTensorV2(),
+        ])
+    
+    
     
     test_dataset = ImagesDataset("../data/processed/test/",transform = eval_transforms)
     test_loader = DataLoader(test_dataset, shuffle=False, num_workers=4, batch_size=32, pin_memory=True)

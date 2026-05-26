@@ -31,29 +31,48 @@ if __name__ == "__main__":
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     
     parser=argparse.ArgumentParser()
+    
     parser.add_argument("-e", "--epochs", type=int, default=10, required=False, help="Total number of epochs")
-    parser.add_argument("-bs", "--batch_size", type=int, default=32, required=False, help="Batch size")
-    parser.add_argument("-n", "--num_workers", type=int, default=4, required=False, help="Number of workers")
-    parser.add_argument("-r", "--resume", type=str,default=None,required=False, help="Path to checkpoint to resume training")
+    parser.add_argument("-bs", "--batch-size", type=int, default=32, required=False, help="Batch size")
+    parser.add_argument("-n", "--num-workers", type=int, default=4, required=False, help="Number of workers")
+    parser.add_argument("-l", "--load", type=str,default=None,required=False, help="Path to checkpoint to resume training")
+    parser.add_argument("-s","--sampler", type=int, default=0, required=False, help="Toggle sampler (1=on, 0=off)")
+    parser.add_argument("-pw","--pos-weight", type=int, default=0, required=False, help="Toggle POS_WEIGHT (1=on, 0=off)")
+    parser.add_argument("-a", "--augment",type=int, default=1, required=False, help="Toggle augmentation (1=on, 0=off)")
 
     args = parser.parse_args()
 
     EPOCHS = args.epochs
     BATCH_SIZE = args.batch_size
     NUM_WORKERS=args.num_workers
+    SAMPLER = args.sampler
+    POS_WEIGHT=args.pos_weight
+    AUGMENT = args.augment
 
     print(f"Running {EPOCHS} epochs with {BATCH_SIZE} batch size and {NUM_WORKERS} workers")
-    train_transforms= A.Compose([
-                                    A.Resize(224,224),
-                                    A.HorizontalFlip(p=0.5),
-                                    A.OneOf([
-                                        A.ImageCompression(quality_range=(20,90), p=1.0),
-                                        A.GaussNoise(std_range= (0.01,0.05  ), p=1.0),
-                                        ], p=0.5),
-                                    A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.25),
-                                    A.Normalize(mean=[0.485,0.456,0.406],std=[0.229,0.224,0.225]),
-                                    A.ToTensorV2()]
-                               )
+    print(f"Augmentation: {'on' if AUGMENT else 'off'}")
+    print(f"Sampler: {'on' if SAMPLER else 'off'}")
+    print(f"Pos weight: {'on' if POS_WEIGHT else 'off'}")    
+    
+    if AUGMENT == 1:
+        train_transforms= A.Compose([
+                                        A.Resize(224,224),
+                                        A.HorizontalFlip(p=0.5),
+                                        A.OneOf([
+                                            A.ImageCompression(quality_range=(20,90), p=1.0),
+                                            A.GaussNoise(std_range= (0.01,0.05  ), p=1.0),
+                                            ], p=0.5),
+                                        A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.25),
+                                        A.Normalize(mean=[0.485,0.456,0.406],std=[0.229,0.224,0.225]),
+                                        A.ToTensorV2()]
+        )
+    else:
+        train_transforms = A.Compose([
+        A.Resize(224,224),
+        A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        A.ToTensorV2(),
+    ])
+        
     eval_transforms = A.Compose([
         A.Resize(224,224),
         A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -64,41 +83,41 @@ if __name__ == "__main__":
     train_dataset= ImagesDataset("../data/processed/train/", transform=train_transforms)
     val_dataset = ImagesDataset("../data/processed/val/", transform= eval_transforms)
     
-    # SAMPLER
-    
-    # targets = train_dataset.labels
-    # class_counts = np.bincount(targets)
-    # class_weights = 1.0/class_counts
-    # sample_weights = torch.DoubleTensor([class_weights[label] for label in targets])
-    
-    # sampler = WeightedRandomSampler(
-    #     weights=sample_weights,
-    #     num_samples=len(sample_weights),
-    #     replacement=True
-    # )
-    
-
-    # train_loader= DataLoader(train_dataset, batch_size=BATCH_SIZE, sampler=sampler, num_workers=NUM_WORKERS, pin_memory=True, persistent_workers=True)
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=True, persistent_workers=True)
+    if(SAMPLER == 1):
+        print("Using sampler...")
+        targets = train_dataset.labels
+        class_counts = np.bincount(targets)
+        class_weights = 1.0/class_counts
+        sample_weights = torch.DoubleTensor([class_weights[label] for label in targets])
+        sampler = WeightedRandomSampler(
+            weights=sample_weights,
+            num_samples=len(sample_weights),
+            replacement=True
+        )
+        train_loader= DataLoader(train_dataset, batch_size=BATCH_SIZE, sampler=sampler, num_workers=NUM_WORKERS, pin_memory=True, persistent_workers=True)
+    else:
+        train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=True, persistent_workers=True)
     val_loader= DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS,pin_memory=True, persistent_workers=True)
 
     model, device = get_model()
     print(f"Model running on {device}...")
 
-    # POS_WEIGHT
     
-    # cirterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([6.35]).to(device))
-    criterion= nn.BCEWithLogitsLoss()
+    if (POS_WEIGHT == 1): 
+        criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([6.35]).to(device))
+    else:
+        criterion= nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
-
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer,T_max=EPOCHS)
 
     start_epoch = 0
     global_balanced_acc_score=0.0
     global_threshold=0.5
     
-    if args.resume is not None:
-        checkpoint = torch.load(args.resume, map_location=device)
+    if args.load is not None:
+        checkpoint = torch.load(args.load, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
+        scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         start_epoch = checkpoint["epoch"]
         global_balanced_acc_score = checkpoint["global_balanced_acc_score"]
@@ -108,6 +127,7 @@ if __name__ == "__main__":
     print("Compiling model...")
     model = torch.compile(model)
     
+    name = f"{timestamp}_e{EPOCHS}_bs{BATCH_SIZE}_aug{AUGMENT}_sampler{SAMPLER}_pw{POS_WEIGHT}"
     for epoch in range(start_epoch, EPOCHS):
         model.train()
         running_loss=0.0
@@ -156,18 +176,6 @@ if __name__ == "__main__":
             epoch_balanced_acc_score = balanced_acc_scores[best_idx]
             
             
-            # THRESHOLD SWEEP
-            
-            # thresholds = np.arange(0.01, 1.0, 0.01)
-            # epoch_threshold = 0.5
-            # epoch_balanced_acc_score = 0.0
-            # for t in thresholds:
-            #     all_preds = (all_probs > t).astype(float)
-            #     epoch_balanced_acc_score = balanced_accuracy_score(all_labels, all_preds)
-            #     if (epoch_balanced_acc_score < epoch_balanced_acc_score):
-            #         epoch_threshold = t
-            #         epoch_balanced_acc_score = epoch_balanced_acc_score
-        
         all_preds = (all_probs > epoch_threshold).astype(float)
         
 
@@ -183,7 +191,8 @@ if __name__ == "__main__":
         
         auc = roc_auc_score(all_labels, all_probs)
         print(f"AUC {auc}")
-                
+        
+        
         is_best = epoch_balanced_acc_score > global_balanced_acc_score
         if is_best:
             global_balanced_acc_score=epoch_balanced_acc_score
@@ -193,22 +202,24 @@ if __name__ == "__main__":
                 "epoch": epoch +1,
                 "model_state_dict": model._orig_mod.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
+                "scheduler_state_dict": scheduler.state_dict(),
                 "global_balanced_acc_score": global_balanced_acc_score,
                 "global_threshold": global_threshold
             }
-            torch.save(cp,"../checkpoints/best.pth")
-            print(f"New best model saved: {global_balanced_acc_score:.4f}")
+            torch.save(cp,f"../checkpoints/{name}_best.pth")
+            print(f"New best model saved with balanced accuracy: {global_balanced_acc_score:.4f} at {name}_best.pth")
         
         cp ={
                 "epoch": epoch +1,
                 "model_state_dict": model._orig_mod.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
+                "scheduler_state_dict": scheduler.state_dict(),
                 "global_balanced_acc_score": global_balanced_acc_score,
                 "epoch_balanced_acc_score": epoch_balanced_acc_score,
                 "global_threshold": global_threshold,
                 "epoch_threshold": epoch_threshold
             }
-        torch.save(cp,"../checkpoints/latest.pth")
+        torch.save(cp,f"../checkpoints/{name}_latest.pth")
         
         lr = optimizer.param_groups[0]["lr"]
         print(f"Threshold of epoch {epoch+1}: {epoch_threshold:.4f}")
@@ -220,4 +231,5 @@ if __name__ == "__main__":
             f"Balanced accuracy of best model: {global_balanced_acc_score:.4f} \n"
             f"lr: {lr} \n"
             )
-    
+        
+        scheduler.step()
