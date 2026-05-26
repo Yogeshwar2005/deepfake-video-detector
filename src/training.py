@@ -100,7 +100,7 @@ if __name__ == "__main__":
 
     
     if (POS_WEIGHT == 1): 
-        criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([6.35]).to(device))
+        criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([0.15736747005]).to(device))
     else:
         criterion= nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
@@ -112,7 +112,7 @@ if __name__ == "__main__":
     global_auc=0.0
     
     if args.load is not None:
-        checkpoint = torch.load(args.load, map_location=device)
+        checkpoint = torch.load(args.load, map_location=device, weights_only=False)
         model.load_state_dict(checkpoint["model_state_dict"])
         scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])

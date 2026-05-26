@@ -1,4 +1,5 @@
 import torch
+import logging
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from tqdm import tqdm
@@ -24,11 +25,21 @@ if __name__ == "__main__":
     parser.add_argument("-c","--compress",type = int, required=False, default=0, help="Whether to apply compression transformation or not")
 
     args = parser.parse_args()
+    name = args.load.split("/")[-1].split("/")[-1].split(".")[0]
     
+    log_dir=Path("../logs")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(message)s",
+        handlers=[
+                logging.FileHandler(log_dir / f"{name}.log"),
+                logging.StreamHandler()]
+    )
 
+    logger = logging.getLogger(__name__)
     
     if(args.compress == 1):
-        print("Compression transformation applied")
+        logger.info("Compression transformation applied")
         eval_transforms = A.Compose([
         A.Resize(224,224),
         A.ImageCompression(quality_range=(20,90)),
@@ -37,7 +48,7 @@ if __name__ == "__main__":
     ])
         
     else:
-        print("No compression transformation applied")
+        logger.info("No compression transformation applied")
         eval_transforms = A.Compose([
                           A.Resize(224,224),
                           A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -51,14 +62,14 @@ if __name__ == "__main__":
     
     model, device  = get_model()
 
-    print(f"Model running on {device}...")
+    logger.info(f"Model running on {device}...")
 
 
-    checkpoint = torch.load(Path(args.load), map_location=device)
+    checkpoint = torch.load(Path(args.load), map_location=device, weights_only=False)
     model.load_state_dict(checkpoint["model_state_dict"])
-    print("Loaded checkpoint:", args.load)
+    logger.info(f"Loaded checkpoint: {args.load}")
     
-    print("Compiling model...")
+    logger.info("Compiling model...")
     model = torch.compile(model)
     model.eval()
        
@@ -67,7 +78,7 @@ if __name__ == "__main__":
     else:
         threshold = checkpoint["global_threshold"]
     
-    print(f"Threshold: {threshold:.4f}")
+    logger.info(f"Threshold: {threshold:.4f}")
 
     all_labels = []
     all_probs=[]
@@ -86,18 +97,18 @@ if __name__ == "__main__":
                 all_labels.extend(labels.cpu().numpy().flatten())
     all_preds = (np.array(all_probs) > threshold).astype(float)
 
-    print(f"Mean fake probability: {np.mean(all_probs):.4f}")
-    print(f"Min probability: {np.min(all_probs):.4f}")
-    print(f"Max probability: {np.max(all_probs):.4f}")
+    logger.info(f"Mean fake probability: {np.mean(all_probs):.4f}")
+    logger.info(f"Min probability: {np.min(all_probs):.4f}")
+    logger.info(f"Max probability: {np.max(all_probs):.4f}")
     
-    print("Confusion matrix: ")
-    print(confusion_matrix(all_labels, all_preds))
+    logger.info("Confusion matrix: ")
+    logger.info(confusion_matrix(all_labels, all_preds))
             
-    print("Classification report: ")
-    print(classification_report(all_labels, all_preds, target_names=["real", "fake"]))
+    logger.info("Classification report: ")
+    logger.info(classification_report(all_labels, all_preds, target_names=["real", "fake"]))
 
     auc = roc_auc_score(all_labels, all_probs)
-    print(f"AUC: {auc}")
+    logger.info(f"AUC: {auc}")
     
     balanced_acc_score = balanced_accuracy_score(all_labels, all_preds)
-    print(f"Balanced accuracy: {balanced_acc_score:.4f}")
+    logger.info(f"Balanced accuracy: {balanced_acc_score:.4f}")
