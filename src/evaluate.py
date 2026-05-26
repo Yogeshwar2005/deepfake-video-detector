@@ -31,7 +31,7 @@ if __name__ == "__main__":
         print("Compression transformation applied")
         eval_transforms = A.Compose([
         A.Resize(224,224),
-        A.ImageCompression(quality_range=(10,30)),
+        A.ImageCompression(quality_range=(20,90)),
         A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         A.ToTensorV2(),
     ])
@@ -47,16 +47,16 @@ if __name__ == "__main__":
     
     
     test_dataset = ImagesDataset("../data/processed/test/",transform = eval_transforms)
-    test_loader = DataLoader(test_dataset, shuffle=False, num_workers=4, batch_size=32, pin_memory=True)
+    test_loader = DataLoader(test_dataset, shuffle=False, num_workers=4, batch_size=32, pin_memory=True, persistent_workers=True)
     
     model, device  = get_model()
 
     print(f"Model running on {device}...")
 
 
-    checkpoint = torch.load(Path(args.checkpoint), map_location=device)
+    checkpoint = torch.load(Path(args.load), map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
-    print("Loaded checkpoint:", args.checkpoint)
+    print("Loaded checkpoint:", args.load)
     
     print("Compiling model...")
     model = torch.compile(model)
@@ -86,6 +86,10 @@ if __name__ == "__main__":
                 all_labels.extend(labels.cpu().numpy().flatten())
     all_preds = (np.array(all_probs) > threshold).astype(float)
 
+    print(f"Mean fake probability: {np.mean(all_probs):.4f}")
+    print(f"Min probability: {np.min(all_probs):.4f}")
+    print(f"Max probability: {np.max(all_probs):.4f}")
+    
     print("Confusion matrix: ")
     print(confusion_matrix(all_labels, all_preds))
             
@@ -93,7 +97,7 @@ if __name__ == "__main__":
     print(classification_report(all_labels, all_preds, target_names=["real", "fake"]))
 
     auc = roc_auc_score(all_labels, all_probs)
-    print(f"AUC {auc}")
+    print(f"AUC: {auc}")
     
     balanced_acc_score = balanced_accuracy_score(all_labels, all_preds)
     print(f"Balanced accuracy: {balanced_acc_score:.4f}")
