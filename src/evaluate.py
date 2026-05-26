@@ -8,6 +8,7 @@ from sklearn.metrics import(
     confusion_matrix, balanced_accuracy_score,
     classification_report
 )
+import albumentations as A
 
 
 import sys
@@ -16,6 +17,7 @@ from model import get_model
 from dataset import ImagesDataset
 
 if __name__ == "__main__":
+    torch.set_float32_matmul_precision('high')
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--checkpoint", type=str, required=True, help="Path to model")
     parser.add_argument("-t","--threshold",type = float, required=False, default=None, help="Threshold for predicting fake")
@@ -23,39 +25,46 @@ if __name__ == "__main__":
     
 
     
-    eval_transforms = transforms.Compose([
-        transforms.ToPILImage(),
-        transforms.Resize((224,224)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    eval_transforms = A.Compose([
+        A.Resize(224,224),
+        A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        A.ToTensorV2(),
     ])
     
     test_dataset = ImagesDataset("../data/processed/test/",transform = eval_transforms)
-    test_loader = DataLoader(test_dataset, shuffle=False, num_workers=4, batch_size=32)
+    test_loader = DataLoader(test_dataset, shuffle=False, num_workers=4, batch_size=32, pin_memory=True)
     
     model, device  = get_model()
-    print(f"model running on {device}")
-    
+
+    print(f"Model running on {device}...")
+
+
     checkpoint = torch.load(Path(args.checkpoint), map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
     print("Loaded checkpoint:", args.checkpoint)
     
+    print("Compiling model...")
+    model = torch.compile(model)
+    model.eval()
+       
     if args.threshold is not None:
         threshold = args.threshold
     else:
-        threshold = checkpoint["threshold"]
+        threshold = checkpoint["global_best_threshold"]
     
-    print(f"Threshold: {threshold}")
+    print(f"Threshold: {threshold:.4f}")
 
-    
-    model.eval()
     all_preds=[]
     all_labels = []
     with torch.inference_mode():
         for images, labels in tqdm(test_loader, desc="Testing"):
-                images = images.to(device)
-                labels = labels.float().unsqueeze(1).to(device)
+                images = images.to(device, non_blocking=True)
+                images =images.to(memory_format = torch.channels_last)
+                
+                labels = labels.float().unsqueeze(1).to(device, non_blocking=True)
+                
                 outputs = model(images)
+                
                 probs = torch.sigmoid(outputs)
                 predictions = (probs> threshold).float()
                 
@@ -70,4 +79,4 @@ if __name__ == "__main__":
     print(classification_report(all_labels, all_preds, target_names=["real", "fake"]))
 
     balanced_acc_score = balanced_accuracy_score(all_labels, all_preds)
-    print("Balanced accuracy:",balanced_acc_score)
+    print(f"Balanced accuracy: {balanced_acc_score:.4f}")

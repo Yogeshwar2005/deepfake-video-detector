@@ -17,6 +17,7 @@ class ImagesDataset(Dataset):
             print(f"failed to load image: {self.images[idx]}")
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         if self.transform is not None:
-            image = self.transform(image)
+            augmented = self.transform(image=image)
+            image = augmented['image']
         return image, self.labels[idx]
         
