@@ -99,7 +99,8 @@ if __name__ == "__main__":
     print(f"Model running on {device}...")
 
     
-    if (POS_WEIGHT == 1): 
+    if (POS_WEIGHT == 1):
+        print("Using pos_weight...")
         criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([0.15736747005]).to(device))
     else:
         criterion= nn.BCEWithLogitsLoss()
@@ -120,12 +121,12 @@ if __name__ == "__main__":
         global_balanced_acc_score = checkpoint["global_balanced_acc_score"]
         global_threshold = checkpoint["global_threshold"]
         global_auc = checkpoint["global_auc"]
-        print(f"Resumed training from epoch {start_epoch}")
+        print(f"Resuming training from epoch {start_epoch}...")
     
     print("Compiling model...")
     model = torch.compile(model)
     
-    name = f"e={EPOCHS}__augment-{'on' if AUGMENT else 'off'}__sampler-{'on' if SAMPLER else 'off'}__pos_weight-{'on' if POS_WEIGHT else 'off'}"
+    name = f"e-{EPOCHS}__augment-{'on' if AUGMENT else 'off'}__sampler-{'on' if SAMPLER else 'off'}__pos_weight-{'on' if POS_WEIGHT else 'off'}"
     for epoch in range(start_epoch, EPOCHS):
         model.train()
         running_loss=0.0
@@ -181,21 +182,8 @@ if __name__ == "__main__":
             
             
         all_preds = (all_probs > epoch_threshold).astype(float)
-        
-
-        print("Confusion matrix:")
-        print(confusion_matrix(all_labels, all_preds))
-
-        print("Classification report:")
-        print(classification_report(
-            all_labels,
-            all_preds,
-            target_names=["real", "fake"]
-        ))
-        
         epoch_auc = roc_auc_score(all_labels, all_probs)
-        
-        
+            
         is_best = epoch_auc > global_auc
         if is_best:
             global_auc = epoch_auc
@@ -228,17 +216,24 @@ if __name__ == "__main__":
         torch.save(cp,f"../checkpoints/latest__{name}.pth")
         
         lr = optimizer.param_groups[0]["lr"]
+        confusion_mat = confusion_matrix(all_labels, all_preds)
+        classification_repo = classification_report(all_labels, all_preds, target_names=["real", "fake"])
+        
+        print("Confusion matrix:")
+        print(confusion_mat)
+        print("Classification report:")
+        print(classification_repo)
         print(
             f"Epoch: {epoch+1}/{EPOCHS} \n" 
             f"Loss:{avg_loss:.4f} \n" 
-            f"Balanced accuracy of epoch: {epoch_balanced_acc_score:.4f} \n" 
+            f"lr: {lr:.4f} \n"
+            f"Balanced accuracy of epoch {epoch+1}: {epoch_balanced_acc_score:.4f} \n" 
             f"Balanced accuracy of best model: {global_balanced_acc_score:.4f} \n"
-            f"AUC of epoch: {epoch_auc} \n"
-            f"AUC of best model: {global_auc} \n"
-            f"lr: {lr} \n"
+            f"AUC of epoch {epoch+1}: {epoch_auc:.4f} \n"
+            f"AUC of best model: {global_auc:.4f} \n"
+            f"Threshold of epoch {epoch+1}: {epoch_threshold:.4f} \n" 
+            f"Threshold of best model: {global_threshold:.4f} \n"
             )
-        print(f"Threshold of epoch {epoch+1}: {epoch_threshold:.4f}")
-        print(f"Threshold of best model: {global_threshold:.4f}")
-        
+      
         
         scheduler.step()

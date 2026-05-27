@@ -1,0 +1,27 @@
+#!/bin/bash
+
+MODEL=$1
+
+echo
+echo "=========================================="
+echo "Clean test set, checkpoint threshold"
+echo "=========================================="
+python3 ../src/evaluate.py -l "$MODEL"
+
+echo
+echo "=========================================="
+echo "Clean test set, threshold = 0.5"
+echo "=========================================="
+python3 ../src/evaluate.py -l "$MODEL" -t 0.5
+
+echo
+echo "=========================================="
+echo "Compressed test set, checkpoint threshold"
+echo "=========================================="
+python3 ../src/evaluate.py -l "$MODEL" -c 1
+
+echo
+echo "=========================================="
+echo "Compressed test set, threshold = 0.5"
+echo "=========================================="
+python3 ../src/evaluate.py -l "$MODEL" -t 0.5 -c 1
