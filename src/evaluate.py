@@ -27,11 +27,19 @@ def seed_everything(seed=42):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False    
 
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
 if __name__ == "__main__":
     
     SEED=42
     seed_everything(SEED)
     print("Seed:", SEED)
+    
+    g=torch.Generator()
+    g.manual_seed(SEED)
     
     torch.set_float32_matmul_precision('high')
     parser = argparse.ArgumentParser()
@@ -42,7 +50,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     name = Path(args.load).stem
     
-    log_dir=Path("../logs")
+    log_dir=Path("../logs/test_logs")
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s , %(message)s",
@@ -73,7 +81,14 @@ if __name__ == "__main__":
     
     
     test_dataset = ImagesDataset("../data/processed/test/",transform = eval_transforms)
-    test_loader = DataLoader(test_dataset, shuffle=False, num_workers=4, batch_size=32, pin_memory=True, persistent_workers=True)
+    test_loader = DataLoader(test_dataset,
+                             shuffle=False,
+                             num_workers=4,
+                             batch_size=32,
+                             pin_memory=True,
+                             persistent_workers=True,
+                             worker_init_fn=seed_worker,
+                             generator=g)
     
     model, device  = get_model()
 
