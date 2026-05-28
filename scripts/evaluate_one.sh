@@ -2,6 +2,11 @@
 
 MODEL=$1
 
+
+echo "########################################## "
+echo "MODEL: $MODEL"
+echo "##########################################"
+
 echo
 echo "=========================================="
 echo "Clean test set, checkpoint threshold"

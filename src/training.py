@@ -1,5 +1,5 @@
 # IMPORTS
-
+import torchvision
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -44,6 +44,7 @@ if __name__ == "__main__":
     SAMPLER = args.sampler
     POS_WEIGHT=args.pos_weight
     AUGMENT = args.augment
+    TOPK=0.8
 
     print(f"Running {EPOCHS} epochs with {BATCH_SIZE} batch size and {NUM_WORKERS} workers")
     print(f"Augmentation: {'on' if AUGMENT else 'off'}")
@@ -139,7 +140,26 @@ if __name__ == "__main__":
             optimizer.zero_grad()
             
             outputs = model(images)
-            loss=criterion(outputs, labels)
+
+            # #--------- Online hard example mining ----------
+            
+            # losses = criterion(outputs, labels).squeeze(1)
+            # k = int(TOPK * len(labels))
+            # hard_losses, _ = torch.topk(losses, k)
+            # loss = hard_losses.mean()
+            
+            # #--------- Online hard example mining ----------
+
+            
+            #loss=criterion(outputs, labels)
+            
+            loss = torchvision.ops.sigmoid_focal_loss(
+                inputs= outputs,
+                targets=labels,
+                alpha=0.15736747005 if POS_WEIGHT else 0.25,
+                gamma=2.0,
+                reduction="mean"
+            )
             loss.backward()
             
             optimizer.step()
@@ -198,8 +218,8 @@ if __name__ == "__main__":
                 "global_threshold": global_threshold,
                 "global_auc": global_auc
             }
-            torch.save(cp,f"../checkpoints/best__{name}.pth")
-            print(f"New best model saved with AUC: {global_auc:.4f} at best__{name}.pth")
+            torch.save(cp,f"../checkpoints/best__focal-loss{name}.pth")
+            print(f"New best model saved with AUC: {global_auc:.4f} at best__focal-loss_{name}.pth")
         
         cp ={
                 "epoch": epoch +1,
@@ -213,7 +233,7 @@ if __name__ == "__main__":
                 "epoch_threshold": epoch_threshold,
                 "epoch_auc": epoch_auc
             }
-        torch.save(cp,f"../checkpoints/latest__{name}.pth")
+        torch.save(cp,f"../checkpoints/latest__focal-loss_{name}.pth")
         
         lr = optimizer.param_groups[0]["lr"]
         confusion_mat = confusion_matrix(all_labels, all_preds)
@@ -226,7 +246,7 @@ if __name__ == "__main__":
         print(
             f"Epoch: {epoch+1}/{EPOCHS} \n" 
             f"Loss:{avg_loss:.4f} \n" 
-            f"lr: {lr:.4f} \n"
+            f"lr: {lr:} \n"
             f"Balanced accuracy of epoch {epoch+1}: {epoch_balanced_acc_score:.4f} \n" 
             f"Balanced accuracy of best model: {global_balanced_acc_score:.4f} \n"
             f"AUC of epoch {epoch+1}: {epoch_auc:.4f} \n"

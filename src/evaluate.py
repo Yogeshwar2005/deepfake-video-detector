@@ -11,13 +11,28 @@ from sklearn.metrics import(
 )
 import albumentations as A
 import numpy as np
+import random
+import os
 
 import sys
 sys.path.append("../src/")
 from model import get_model
 from dataset import ImagesDataset
 
+def seed_everything(seed=42):
+    random.seed(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False    
+
 if __name__ == "__main__":
+    
+    SEED=42
+    seed_everything(SEED)
+    print("Seed:", SEED)
+    
     torch.set_float32_matmul_precision('high')
     parser = argparse.ArgumentParser()
     parser.add_argument("-l", "--load", type=str, required=True, help="Path to model")
