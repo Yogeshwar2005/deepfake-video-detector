@@ -48,11 +48,22 @@ if __name__ == "__main__":
     parser.add_argument("-l", "--load", type=str, required=True, help="Path to model")
     parser.add_argument("-t","--threshold",type = float, required=False, default=None, help="Threshold for predicting fake")
     parser.add_argument("-c","--compress",type = int, required=False, default=0, help="Whether to apply compression transformation or not")
-
+    parser.add_argument("--validate", action="store_true", help="Choose validation dataset")
+    parser.add_argument("--test", action="store_true", help="Choose test dataset")
+    
     args = parser.parse_args()
     name = Path(args.load).stem
+    validate = args.validate
+    test = args.test
     
-    log_dir=Path("../logs/test_logs")
+    if validate:
+        log_dir=Path("../logs/validation_logs")
+    elif test:
+        log_dir=Path("../logs/test_logs")
+    else:
+        print("Error: Use --validate or --test")
+        exit()
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s , %(message)s",
@@ -81,9 +92,9 @@ if __name__ == "__main__":
         ])
     
     
-    
-    test_dataset = ImagesDataset("../data/processed/test/",transform = eval_transforms)
-    test_loader = DataLoader(test_dataset,
+    if validate:
+        eval_dataset = ImagesDataset("../data/processed/val/",transform = eval_transforms)
+        eval_loader = DataLoader(eval_dataset,
                              shuffle=False,
                              num_workers=4,
                              batch_size=32,
@@ -91,13 +102,24 @@ if __name__ == "__main__":
                              persistent_workers=True,
                              worker_init_fn=seed_worker,
                              generator=g)
+    else:
+        eval_dataset = ImagesDataset("../data/processed/test/",transform = eval_transforms)
+        eval_loader = DataLoader(eval_dataset,
+                             shuffle=False,
+                             num_workers=4,
+                             batch_size=32,
+                             pin_memory=True,
+                             persistent_workers=True,
+                             worker_init_fn=seed_worker,
+                             generator=g)
+        
     
     model, device  = get_model()
 
     print(f"Model running on {device}...")
 
     checkpoint = torch.load(Path(args.load), map_location=device, weights_only=False)
-    print(f"Loading checkpoint: {args.load}...")
+    logger.info(f"Loading checkpoint: {args.load}...")
     model.load_state_dict(checkpoint["model_state_dict"])
     
     print("Compiling model...")
@@ -112,7 +134,7 @@ if __name__ == "__main__":
     all_labels = []
     all_probs=[]
     with torch.inference_mode():
-        for images, labels in tqdm(test_loader, desc="Testing"):
+        for images, labels in tqdm(eval_loader, desc=f"{'Validating' if validate else 'Testing'}"):
                 images = images.to(device, non_blocking=True)
                 images =images.to(memory_format = torch.channels_last)
                 
