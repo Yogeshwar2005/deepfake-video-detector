@@ -3,7 +3,7 @@ from pathlib import Path
 import pandas as pd
 
 LOG_DIR = Path("../logs/test_logs")
-OUTPUT_CSV = Path("../results/test_results.csv")
+OUTPUT_CSV = Path("../results/clean_test_seed_results.csv")
 
 def extract(pattern, text, cast=None, default = None):
     match = re.search(pattern,text)
@@ -45,6 +45,7 @@ def parse_filename(name):
     info["focal"] =  "on" if "focal" in name else "off"
     info["topk"] = "on" if "topk" in name else "off"
 
+    info["seed"] = extract(r"seed-([0-9]+)", name, int)
     info["augment"] = extract(r"augment-(on|off)", name)
     info["sampler"] = extract(r"sampler-(on|off)", name)
     info["pos_weight"] = extract(r"pos_weight-(on|off)", name)
@@ -59,12 +60,13 @@ def parse_filename(name):
 
 rows = []
 
-for log_file in sorted(LOG_DIR.glob("*.log")):
+for log_file in sorted(LOG_DIR.glob("best__seed*.log")):
     text = log_file.read_text()
     row={}
     
     row["model_name"]=log_file.stem
     row.update(parse_filename(log_file.stem))
+    
     
     row["compression"] = extract(r"Compression:\s+(on|off)",
                                  text)
