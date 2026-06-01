@@ -6,9 +6,9 @@ __pycache__/
 *.pyc
 *.pyo
 
-checkpoints/
+models/
+
 notebooks/.ipynb_checkpoints/
 
-results/
+
 reports/
-logs/

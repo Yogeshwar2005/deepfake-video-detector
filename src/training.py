@@ -269,7 +269,7 @@ if __name__ == "__main__":
                 "global_threshold": global_threshold,
                 "global_auc": global_auc
             }
-            torch.save(cp,f"../checkpoints/best__{name}.pth")
+            torch.save(cp,f"../models/efficientnet_b0/checkpoints/best__{name}.pth")
             print(f"New best model saved with AUC: {global_auc:.4f} at best__{name}.pth")
         
         cp ={
@@ -284,7 +284,7 @@ if __name__ == "__main__":
                 "epoch_threshold": epoch_threshold,
                 "epoch_auc": epoch_auc
             }
-        torch.save(cp,f"../checkpoints/latest__{name}.pth")
+        torch.save(cp,f"../models/efficientnet_b0/checkpoints/latest__{name}.pth")
         
         lr = optimizer.param_groups[0]["lr"]
         confusion_mat = confusion_matrix(all_labels, all_preds)

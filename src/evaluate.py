@@ -57,9 +57,9 @@ if __name__ == "__main__":
     test = args.test
     
     if validate:
-        log_dir=Path("../logs/validation_logs")
+        log_dir=Path("../models/efficientnet_b0/logs/validation_logs")
     elif test:
-        log_dir=Path("../logs/test_logs")
+        log_dir=Path("../models/efficientnet_b0/logs/test_logs")
     else:
         print("Error: Use --validate or --test")
         exit()
