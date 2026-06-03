@@ -27,6 +27,31 @@ def split_videos(videos, label, manipulation):
         
         shutil.copy2(Path(video), (output_dir / video_name))
 
+
+text_path= Path("../data/raw/celeb-df-v2/List_of_testing_videos.txt")
+with open(text_path) as f:
+    test_videos = {
+        line.strip().split("/")[-1] for line in f
+    }
+    
+    
+    
+def get_split_celeb(video_name):
+    return "test" if video_name in test_videos else None
+
+def split_videos_celeb(videos, label):
+    for video in tqdm(videos,desc=f"Splitting celeb-df-v2" ):
+        video_name = f"{Path(video).stem}.mp4"
+        
+        split = get_split_celeb(video_name=video_name)
+        if not split:
+            continue
+        output_dir = Path(f"../data/processed/celeb-df-v2/{split}/{label}")
+        
+        shutil.copy2(Path(video), (output_dir / video_name))
+    
+
+
 if __name__ == "__main__":
     
     raw_dir = Path("../data/raw")
@@ -46,5 +71,18 @@ if __name__ == "__main__":
     split_videos(faceshifter_videos, "fake", manipulation="faceshifter")
     split_videos(faceswap_videos, "fake", manipulation="faceswap")
     split_videos(neuraltextures_videos, "fake", manipulation="neuraltextures")
+
+    raw_dir = Path("../data/raw/celeb-df-v2")
+    celeb_real_videos = list((raw_dir / "Celeb-real").glob("*.mp4"))
+    celeb_synthesis_videos = list((raw_dir / "Celeb-synthesis").glob("*.mp4"))
+    youtube_real_videos = list((raw_dir / "YouTube-real").glob("*.mp4"))
+    
+    split_videos_celeb(celeb_real_videos, "real")
+    split_videos_celeb(celeb_synthesis_videos, "fake")
+    split_videos_celeb(youtube_real_videos, "real")
+    
+    print("real count:",len(list(Path("../data/processed/celeb-df-v2/test/real").glob("*.mp4"))))
+    print("fake count:",len(list(Path("../data/processed/celeb-df-v2/test/fake").glob("*.mp4"))))
+
         
         

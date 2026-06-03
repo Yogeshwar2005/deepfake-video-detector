@@ -42,24 +42,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     
     parser.add_argument("--checkpoint", type=str, required=False, default="../models/efficientnet_b0/results/best__seed-3_e-10_augment-on_sampler-off_loss-bce_pw-0.15736747005.pth", help="Select checkpoint")
-    parser.add_argument("--validate", action="store_true")
-    parser.add_argument("--test", action="store_true")
     parser.add_argument("--compress", action="store_true")
     parser.add_argument("--num-frames", type=int, default=16, required=False, help="Number of frames to process")
     parser.add_argument("--aggregation", type=str, default="topk", choices=["mean", "median", "topk", "max"], required=False, help="Choose method of aggregation")    
     
     args = parser.parse_args()
     
-    validate = args.validate
-    test = args.test
     compress = args.compress
     num_frames = args.num_frames
     aggregation = args.aggregation
     
-    videos_dir = Path(f"../data/processed/videos/")
-    log_dir = Path("../models/efficientnet_b0/logs/video_eval_logs/")
+    videos_dir = Path(f"../data/processed/celeb-df-v2")
+    log_dir = Path("../models/efficientnet_b0/logs/celeb-df-v2_logs/")
     log_file = (
-    f"{'validate' if validate else 'test'}_"
+    "test_"
     f"{aggregation}_frames-{num_frames}"
     f"{'_compress' if compress else ''}.log"
 )
@@ -74,6 +70,7 @@ if __name__ == "__main__":
 
     logger = logging.getLogger(__name__)
     
+    logger.info(f"Aggregation: {aggregation}")
     
     if(compress):
         logger.info("Compression: on")
@@ -91,17 +88,10 @@ if __name__ == "__main__":
                           A.ToTensorV2(),
         ])
     
-    if test:
         logger.info("Testing...")
         eval_dataset = VideoDataset((videos_dir / "test"), transform=eval_transforms, num_frames=num_frames)
-    elif validate:
-        logger.info("Validating...")
-        eval_dataset=VideoDataset((videos_dir / "val"), transform=eval_transforms, num_frames=num_frames)
-    else:
-        logger.info("Error: Use --validate or --test")
-        exit()
     
-    logger.info(f"Aggregation: {aggregation}")
+    
     model, device = get_model()
     checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=False)
     logger.info(f"Loading checkpoint {args.checkpoint}")    
@@ -114,7 +104,7 @@ if __name__ == "__main__":
     labels = []
     skipped = 0
     with torch.inference_mode():
-        for i  in tqdm(range(len(eval_dataset)), desc=f"{'Validating' if validate else 'Testing'}"):
+        for i  in tqdm(range(len(eval_dataset)), desc="Testing"):
             faces,label = eval_dataset[i]
             if faces is None:
                 skipped+=1
@@ -141,36 +131,16 @@ if __name__ == "__main__":
             labels.append(label)
             all_probs.append(calculated_prob.item())
     
-    if validate:
-        all_probs=np.array(all_probs)
-        labels = np.array(labels)
-        fpr,tpr, thresholds = roc_curve(labels, all_probs)
+    
+    all_probs=np.array(all_probs)
+    labels = np.array(labels)
+    threshold = 0.9993
+    all_preds = (all_probs > threshold).astype(float)
         
-        valid = np.isfinite(thresholds)
-        thresholds=thresholds[valid]
-        
-        balanced_acc_scores = (tpr+(1-fpr)) / 2
-        balanced_acc_scores = balanced_acc_scores[valid]
-        
-        best_idx = balanced_acc_scores.argmax()
-        threshold = thresholds[best_idx]
-        balanced_acc_score = balanced_acc_scores[best_idx]
-        
-        all_preds = (all_probs > threshold).astype(float)
-        
-        auc = roc_auc_score(labels, all_probs)
-        confusion_mat = confusion_matrix(labels, all_preds)
-        classification_repo = classification_report(labels, all_preds, target_names=["real", "fake"])
-    else:
-        all_probs=np.array(all_probs)
-        labels = np.array(labels)
-        threshold = 0.9993
-        all_preds = (all_probs > threshold).astype(float)
-        
-        auc = roc_auc_score(labels, all_probs)
-        balanced_acc_score = balanced_accuracy_score(labels, all_preds)
-        confusion_mat = confusion_matrix(labels, all_preds)
-        classification_repo = classification_report(labels, all_preds, target_names=["real", "fake"])
+    auc = roc_auc_score(labels, all_probs)
+    balanced_acc_score = balanced_accuracy_score(labels, all_preds)
+    confusion_mat = confusion_matrix(labels, all_preds)
+    classification_repo = classification_report(labels, all_preds, target_names=["real", "fake"])
         
     logger.info("Confusion matrix: \n %s", confusion_mat)
     logger.info("Classification report: \n %s", classification_repo)
