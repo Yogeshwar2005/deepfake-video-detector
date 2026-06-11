@@ -1,5 +1,6 @@
 from django.shortcuts import render
 from pathlib import Path
+from uuid import uuid4
 from .forms import VideoUploadForm  
 from .inference import predict_video
 
@@ -10,22 +11,40 @@ def home(request):
     if request.method == "POST":
         form = VideoUploadForm(request.POST,request.FILES)
         
+        valid_formats = [".mp4", ".mov", ".avi", ".mkv"]
+      
         if form.is_valid():
             uploaded_file = request.FILES["video"]
-            save_path = UPLOAD_DIR / uploaded_file.name
             
-            with open(save_path, "wb") as desination:
-                for chunk in uploaded_file.chunks():
-                    desination.write(chunk)
+            file_extension = Path(uploaded_file.name).suffix.lower()
+            if file_extension not in valid_formats:
+                return render(request,
+                              "detector/index.html",
+                              {
+                                  "form": form,
+                                  "error": "Invalid file format. Please upload mp4, mov, avi, or mkv."
+                              })
             
-            result = predict_video(video=save_path)
+            save_path = UPLOAD_DIR / f"{uuid4()}{file_extension}"
+            
+            try:
+                with open(save_path, "wb") as destination:
+                    for chunk in uploaded_file.chunks():
+                        destination.write(chunk)
+                
+                result = predict_video(video=save_path)
+            
+            finally:
+                if save_path.exists():
+                    save_path.unlink()
+            
             return render(
                 request,
                 "detector/result.html",
                 {
                     "filename": uploaded_file.name,
                     "prediction": result["prediction"],
-                    "probability": result["probability"]
+                    "probability": round(result["probability"]*100, 2)
                 }
             ) 
         
