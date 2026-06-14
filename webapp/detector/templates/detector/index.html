@@ -23,6 +23,13 @@
 
                             {% csrf_token %}
                             {{form.as_p}}
+
+                            <video id="video-preview"
+                                    class="w-100 mt-3 rounded shadow-sm"
+                                    controls
+                                    style="display: none;">
+                            </video>
+
                             <button type="submit" id="detect-btn" class="btn btn-primary w-100 mt-2">Detect</button>
                             <div id="spinner" style="display: none" class="text-center mt-3">
                                 <div class="spinner-border text-primary" role="status"></div>

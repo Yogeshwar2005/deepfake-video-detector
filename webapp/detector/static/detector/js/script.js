@@ -1,3 +1,4 @@
+// Spinner
 uploadForm = document.getElementById("upload-form");
 
 if (uploadForm){
@@ -8,6 +9,7 @@ if (uploadForm){
 });
 }
 
+// Theme Toggle
 const themeToggle = document.getElementById("theme-toggle");
 
 const savedTheme = localStorage.getItem("theme") || "light";
@@ -25,4 +27,24 @@ if (themeToggle){
     });
 
 
+}
+
+// Video Preview
+const videoInput = document.querySelector("input[type='file']");
+const videoPreview= document.getElementById("video-preview");
+
+if(videoInput && videoPreview){
+    videoInput.addEventListener("change", ()=>{
+        const file = videoInput.files[0];
+
+        if(file){
+            const videoURL = URL.createObjectURL(file);
+            videoPreview.src=videoURL;
+            videoPreview.style.display = "block";
+        }
+        else{
+            videoPreview.src = "";
+            videoPreview.style.display="none";
+        }
+    });
 }
