@@ -3,6 +3,7 @@ from pathlib import Path
 from uuid import uuid4
 from .forms import VideoUploadForm  
 from .inference import predict_video
+from .models import PredictionHistory
 
 UPLOAD_DIR = Path("uploads")
 
@@ -18,12 +19,14 @@ def home(request):
             
             file_extension = Path(uploaded_file.name).suffix.lower()
             if file_extension not in valid_formats:
-                return render(request,
-                              "detector/index.html",
-                              {
-                                  "form": form,
-                                  "error": "Invalid file format. Please upload mp4, mov, avi, or mkv."
-                              })
+                return render(
+                            request,
+                            "detector/index.html",
+                            {
+                              "form": form,
+                              "error": "Invalid file format. Please upload mp4, mov, avi, or mkv."
+                            }
+                        )
             
             save_path = UPLOAD_DIR / f"{uuid4()}{file_extension}"
             
@@ -33,6 +36,13 @@ def home(request):
                         destination.write(chunk)
                 
                 result = predict_video(video=save_path)
+                probability = round(result["probability"]*100, 2)
+                
+                PredictionHistory.objects.create(
+                    filename = uploaded_file.name,
+                    prediction = result["prediction"],
+                    probability = probability
+                    )
             
             finally:
                 if save_path.exists():
@@ -44,13 +54,28 @@ def home(request):
                 {
                     "filename": uploaded_file.name,
                     "prediction": result["prediction"],
-                    "probability": round(result["probability"]*100, 2)
+                    "probability": probability
                 }
             ) 
         
     else:
         form = VideoUploadForm()
-    return render(request,
-                  "detector/index.html",
-                  {"form": form}
-                  )
+    return render(
+            request,
+            "detector/index.html",
+            {
+                "form": form
+            }
+        )
+    
+
+def history(request):
+    records = PredictionHistory.objects.all().order_by("-created_at")
+    
+    return render(
+        request,
+        "detector/history.html",
+        {
+            "records": records
+        }
+    )
