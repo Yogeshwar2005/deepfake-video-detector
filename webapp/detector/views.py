@@ -54,7 +54,10 @@ def home(request):
                 {
                     "filename": uploaded_file.name,
                     "prediction": result["prediction"],
-                    "probability": probability
+                    "probability": probability,
+                    "frames_analyzed": result["frames_analyzed"],
+                    "faces_detected": result["faces_detected"],
+                    "threshold": round(result["threshold"]*100, 2),
                 }
             ) 
         

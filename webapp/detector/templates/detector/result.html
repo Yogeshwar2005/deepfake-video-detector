@@ -11,7 +11,7 @@
                     <button id="theme-toggle" type="button" class="btn btn-outline-secondary mb-3">
                         Dark Mode
                     </button>
-                    <div class="card shadow p-4">
+                    <div class="card shadow p-4" style="height: 85vh;">
                         <h1 class="text-center mb-4">Analysis Result</h1>
                         <p>
                             <strong>File: </strong>
@@ -30,15 +30,34 @@
                                 <h2 class="mb-0">{{ prediction }}</h2>
                             </div>
                         {% endif %}
-                        <div class="chart-container mx-auto mt-4" style="width: 100%; max-width: 700px; height: 400px;  margin: auto;">
+                        <div class="chart-container mx-auto mt-4" style="width: 100%; max-width: 700px; height: 300px;  margin: auto;">
                             <canvas
                                 id="predictionChart"
                                 data-fake-prob="{{ probability|default:0 }}">
                             </canvas>
                         </div>
-                        <p class="text-muted">
-                            Decision threshold: 99.93%
-                        </p>
+                        <div class="row text-center mt-4 mb-4">
+                            <div class="col-md-4">
+                                <div class="card border-0 shadow-sm p-3">
+                                    <h3>{{ frames_analyzed }}</h3>
+                                    <p class="text-muted mb-0">Frames analyzed</p>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="card border-0 shadow-sm p-3">
+                                    <h3>{{ faces_detected }}</h3>
+                                    <p class="text-muted mb-0">Faces detected</p>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="card border-0 shadow-sm p-3">
+                                    <h3>{{ threshold }}%</h3>
+                                    <p class="text-muted mb-0">Threshold</p>
+                                </div>
+                            </div>
+                        </div>
                         <a href="/" class="btn btn-primary w-100">Try another video</a>
                     </div>
                 </div>

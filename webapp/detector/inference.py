@@ -74,18 +74,33 @@ def extract_faces(video):
                 
                 all_faces.append(face)
 
-        if len(all_faces) == 0:
-            return None
-        return torch.stack(all_faces)
+        if len(all_faces) == 0: 
+            return {
+            "faces": None,
+            "frames_analyzed": len(frames),
+            "faces_detected": len(all_faces),
+            }
+                    
+        return {
+            "faces": torch.stack(all_faces),
+            "frames_analyzed": len(frames),
+            "faces_detected": len(all_faces),
+            }
 
 def predict_video(video):
-    faces = extract_faces(video=video)
-    if faces is None:
+    threshold = 0.9993
+    extracted = extract_faces(video=video)
+    if extracted["faces"] is None:
         return {
             "probability": None,
-            "prediction": "No faces detected"
+            "prediction": "No faces detected",
+            "frames_analyzed": extracted["frames_analyzed"],
+            "faces_detected": extracted["faces_detected"],
+            "threshold": threshold
         }
-    threshold = 0.9993
+
+    faces = extracted["faces"]
+    
 
     with torch.inference_mode():
         logits = model(faces.to(device, memory_format=torch.channels_last)).flatten()
@@ -96,6 +111,9 @@ def predict_video(video):
     return {
         "probability": prob.item(),
         "prediction": prediction,
+        "frames_analyzed": extracted["frames_analyzed"],
+        "faces_detected": extracted["faces_detected"],
+        "threshold": threshold
     }    
 
 
