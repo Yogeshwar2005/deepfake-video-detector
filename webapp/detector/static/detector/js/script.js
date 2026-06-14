@@ -48,3 +48,78 @@ if(videoInput && videoPreview){
         }
     });
 }
+
+// Chart Creation
+const chartCanvas = document.getElementById("predictionChart");
+
+if(chartCanvas){
+    const fakeProb = Number(chartCanvas.dataset.fakeProb);
+    const realProb = 100 - fakeProb;
+
+    new Chart(chartCanvas, {
+    type: "bar",
+    data: {
+        labels: ["Fake", "Real"],
+        datasets: [{
+            data: [fakeProb, realProb],
+            backgroundColor: [
+                "#dc3545",
+                "#1cb66e"
+            ],
+            borderRadius: 8,
+            barThickness: 40
+        }]
+    },
+    options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
+
+        plugins: {
+            title: {
+                display: true,
+                text: "Prediction Confidence",
+                font: {
+                    size: 20
+                }
+            },
+
+            legend: {
+                display: false
+            },
+
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return context.raw.toFixed(2) + "%";
+                    }
+                }
+            }
+        },
+
+        scales: {
+            x: {
+                min: 0,
+                max: 100,
+                ticks: {
+                    callback: function(value) {
+                        return value + "%";
+                    }
+                },
+                title: {
+                    display: true,
+                    text: "Probability"
+                }
+            },
+
+            y: {
+                ticks: {
+                    font: {
+                        size: 16
+                    }
+                }
+            }
+        }
+    }
+});
+}
