@@ -4,6 +4,7 @@ from uuid import uuid4
 from .forms import VideoUploadForm  
 from .inference import predict_video
 from .models import PredictionHistory
+from .pdf_utils import generate_report
 
 UPLOAD_DIR = Path("media/uploads")
 
@@ -37,6 +38,16 @@ def home(request):
                         destination.write(chunk)
                 
                 result = predict_video(video=save_path, result_id=result_id)
+                
+                pdf_path = generate_report(
+                    result_id=result_id,
+                    filename=uploaded_file.name,
+                    prediction=result["prediction"],
+                    probability=result["probability"],
+                    frames_analyzed=result["frames_analyzed"],
+                    faces_detected=result["faces_detected"],
+                    threshold=result["threshold"] * 100
+                )
                 probability = round(result["probability"]*100, 2)
                 
                 PredictionHistory.objects.create(
@@ -59,7 +70,8 @@ def home(request):
                     "frames_analyzed": result["frames_analyzed"],
                     "faces_detected": result["faces_detected"],
                     "threshold": round(result["threshold"]*100, 2),
-                    "gradcam_results": result["gradcam_results"]
+                    "gradcam_results": result["gradcam_results"],
+                    "pdf_path": pdf_path,
                 }
             ) 
         
