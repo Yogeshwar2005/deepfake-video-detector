@@ -5,7 +5,7 @@ from .forms import VideoUploadForm
 from .inference import predict_video
 from .models import PredictionHistory
 
-UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR = Path("media/uploads")
 
 # Create your views here.
 def home(request):
@@ -28,14 +28,15 @@ def home(request):
                             }
                         )
             
-            save_path = UPLOAD_DIR / f"{uuid4()}{file_extension}"
+            result_id= uuid4()
+            save_path = UPLOAD_DIR / f"{result_id}{file_extension}"
             
             try:
                 with open(save_path, "wb") as destination:
                     for chunk in uploaded_file.chunks():
                         destination.write(chunk)
                 
-                result = predict_video(video=save_path)
+                result = predict_video(video=save_path, result_id=result_id)
                 probability = round(result["probability"]*100, 2)
                 
                 PredictionHistory.objects.create(
@@ -58,6 +59,7 @@ def home(request):
                     "frames_analyzed": result["frames_analyzed"],
                     "faces_detected": result["faces_detected"],
                     "threshold": round(result["threshold"]*100, 2),
+                    "gradcam_results": result["gradcam_results"]
                 }
             ) 
         

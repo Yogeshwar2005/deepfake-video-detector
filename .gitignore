@@ -13,6 +13,6 @@ notebooks/.ipynb_checkpoints/
 
 reports/
 
-webapp/uploads/
+webapp/media/
 
 db.sqlite3
