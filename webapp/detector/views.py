@@ -38,17 +38,17 @@ def home(request):
                         destination.write(chunk)
                 
                 result = predict_video(video=save_path, result_id=result_id)
-                
+                probability = round(result["probability"]*100, 2)
                 pdf_path = generate_report(
                     result_id=result_id,
                     filename=uploaded_file.name,
                     prediction=result["prediction"],
-                    probability=result["probability"],
+                    probability=probability,
                     frames_analyzed=result["frames_analyzed"],
                     faces_detected=result["faces_detected"],
-                    threshold=result["threshold"] * 100
+                    threshold=result["threshold"] * 100,
+                    gradcam_results=result.get("gradcam_results", []),
                 )
-                probability = round(result["probability"]*100, 2)
                 
                 PredictionHistory.objects.create(
                     filename = uploaded_file.name,
